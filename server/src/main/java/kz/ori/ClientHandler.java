@@ -4,95 +4,97 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class ClientHandler {
-    private Server server;
-    private Socket socket;
+    private static final Logger logger = Logger.getLogger(ClientHandler.class.getName());
+
+    private final Server server;
+    private final Socket socket;
     private DataInputStream in;
     private DataOutputStream out;
     private String username;
 
-
-    public ClientHandler(Server server, Socket socket) throws IOException {
+    public ClientHandler(Server server, Socket socket) {
         this.server = server;
         this.socket = socket;
-        in = new DataInputStream(socket.getInputStream());
-        out = new DataOutputStream(socket.getOutputStream());
 
-        new Thread(() -> {
-            try {
-                while (true) {
-                    String msg = in.readUTF();
-                    if(msg.startsWith("/login ")) {
-                        // /login Bob@gmail.com 111
-                        String[] tokens = msg.split("\\s+");
-                        if(tokens.length != 3) {
-                            sendMessage("Server: Incorrect command");
-                            continue;
-                        }
-                        String login = tokens[1];
-                        String password = tokens[2];
-                        String nick = server.getAuthenticationProvider()
-                                .getUsernameByLoginAndPassword(login, password);
-                        if(nick == null) {
-                            sendMessage("/login_failed Incorrect login/password");
-                            continue;
-                        }
+        try {
+            this.in = new DataInputStream(socket.getInputStream());
+            this.out = new DataOutputStream(socket.getOutputStream());
 
-                        if(server.isUserOnline(nick)) {
-                            sendMessage("/login_failed this username is already in use");
-                            continue;
+            new Thread(() -> {
+                try {
+                    // Authentication
+                    while (true) {
+                        String msg = in.readUTF();
+                        if (msg.startsWith("/login ")) {
+                            String[] tokens = msg.split("\\s+");
+                            String login = tokens[1];
+                            String password = tokens[2];
+                            if (server.getAuthenticationProvider().isAuthenticated(login, password)) {
+                                if (server.isUserOnline(login)) {
+                                    sendMessage("/login_failed User already logged in");
+                                    logger.warning("Login failed for user " + login + ": User already logged in");
+                                } else {
+                                    sendMessage("/login_ok " + login);
+                                    username = login;
+                                    server.subscribe(this);
+                                    logger.info("User logged in: " + username);
+                                    break;
+                                }
+                            } else {
+                                sendMessage("/login_failed Incorrect username or password");
+                                logger.warning("Login failed for user " + login + ": Incorrect username or password");
+                            }
                         }
-                        username = nick;
-                        sendMessage("/login_ok " + username);
-                        server.subscribe(this);
-                        break;
                     }
-                }
-                while (true) {
-                    String msg = in.readUTF();
-
-                    if(msg.startsWith("/")) {
-                        executeCmd(msg);
-                        continue;
+                    // Communication loop
+                    while (true) {
+                        String msg = in.readUTF();
+                        if (msg.startsWith("/quit")) {
+                            break;
+                        }
+                        if (msg.startsWith("/w ")) {
+                            String[] tokens = msg.split("\\s+", 3);
+                            String receiver = tokens[1];
+                            String message = tokens[2];
+                            server.sendPrivateMsg(this, receiver, message);
+                        } else {
+                            server.broadcastMessage(username + ": " + msg);
+                        }
+                        logger.info("Received message from " + username + ": " + msg);
                     }
-                    server.broadcastMessage(username + ": " + msg);
+                } catch (IOException e) {
+                    logger.log(Level.SEVERE, "Error in client handler", e);
+                } finally {
+                    disconnect();
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                disconnect();
-            }
-        }).start();
-
-    }
-
-
-    public void executeCmd(String msg) throws IOException {
-        if(msg.startsWith("/p ")) {
-            String[] tokens = msg.split("\\s+", 3);
-            server.sendPrivateMsg(this, tokens[1], tokens[2]);
-            return;
+            }).start();
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Error setting up client handler", e);
         }
-
     }
 
     public void sendMessage(String msg) {
         try {
             out.writeUTF(msg);
-        }catch (IOException e) {
-            disconnect();
+            logger.info("Sent message to " + username + ": " + msg);
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Error sending message to " + username, e);
         }
     }
 
     public void disconnect() {
-        server.unsubscribe(this);
-        if(socket != null) {
-            try {
-                socket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        try {
+            server.unsubscribe(this);
+            in.close();
+            out.close();
+            socket.close();
+            logger.info("User disconnected: " + username);
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Error disconnecting user " + username, e);
         }
     }
 

@@ -36,4 +36,9 @@ public class InMemoryAuthProvider implements AuthenticationProvider{
         }
         return null;
     }
+
+    @Override
+    public boolean isAuthenticated(String login, String password) {
+        return false;
+    }
 }

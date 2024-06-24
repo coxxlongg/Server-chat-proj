@@ -7,12 +7,17 @@ import javafx.fxml.Initializable;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 
+import java.io.*;
+
+import java.net.Socket;
+import java.net.URL;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ResourceBundle;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.Socket;
-import java.net.URL;
-import java.util.ResourceBundle;
+
 
 public class Controller implements Initializable{
 
@@ -39,7 +44,7 @@ public class Controller implements Initializable{
     private DataInputStream in;
     private DataOutputStream out;
     private String username;
-
+    private static final String HISTORY_FILE_PATH = "chat_history.txt";
     public void setUsername(String username) {
         this.username = username;
         if(this.username == null) {
@@ -66,7 +71,7 @@ public class Controller implements Initializable{
             out = new DataOutputStream(socket.getOutputStream());
             new Thread(() -> {
                 try {
-                    // цикл авторизации
+                    // авторизация
                     while (true) {
                         String msg = in.readUTF();
                         if(msg.startsWith("/login_ok ")) {
@@ -100,6 +105,7 @@ public class Controller implements Initializable{
                     disconnect();
                 }
             }).start();
+
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -162,5 +168,14 @@ public class Controller implements Initializable{
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
         setUsername(null);
+    }
+    private void writeToHistoryFile(String message) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(HISTORY_FILE_PATH, true))) {
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            writer.write("[" + timestamp + "] " + message);
+            writer.newLine();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

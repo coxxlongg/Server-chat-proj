@@ -2,23 +2,27 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import javafx.geometry.*?>
 
-
-<VBox alignment="CENTER" xmlns="http://javafx.com/javafx/17.0.2-ea"
-      xmlns:fx="http://javafx.com/fxml/1"
-      fx:controller="kz.ori.client.Controller">
-    <HBox fx:id="loginBox">
-        <TextField fx:id="loginField" HBox.hgrow="ALWAYS" promptText="Введите логин"/>
-        <PasswordField fx:id="passwordField" HBox.hgrow="ALWAYS" promptText="Введите пароль"/>
-        <Button text="Войти" onAction="#login"/>
+<VBox alignment="TOP_CENTER" spacing="10" xmlns:fx="http://javafx.com/fxml" fx:controller="kz.ori.client.Controller">
+    <HBox fx:id="loginBox" alignment="CENTER" spacing="5">
+        <Label text="Username:"/>
+        <TextField fx:id="loginField" prefWidth="100"/>
+        <Label text="Password:"/>
+        <PasswordField fx:id="passwordField" prefWidth="100"/>
+        <Button text="Login" onAction="#login"/>
     </HBox>
-    <HBox VBox.vgrow="ALWAYS">
-        <TextArea fx:id="msgArea" HBox.hgrow="ALWAYS" editable="false" focusTraversable="false" wrapText="true"/>
-        <ListView fx:id="clientsList"/>
+    <HBox fx:id="msgBox" alignment="CENTER" spacing="5" visible="false" managed="false">
+        <TextArea fx:id="msgArea" prefHeight="200" prefWidth="400" editable="false"/>
+        <VBox>
+            <TextField fx:id="msgField" prefWidth="200"/>
+            <Button text="Send" onAction="#sendMsg"/>
+            <HBox fx:id="changeNickBox" spacing="5">
+                <Label text="New Nickname:"/>
+                <TextField fx:id="newNickField" prefWidth="100"/>
+                <Button text="Change" onAction="#changeNick"/>
+            </HBox>
+        </VBox>
     </HBox>
-    <HBox fx:id="msgBox">
-        <TextField fx:id="msgField" HBox.hgrow="ALWAYS" promptText="Введите сообщение" onAction="#sendMsg"/>
-        <Button text="Отправить" onAction="#sendMsg"/>
-    </HBox>
-
+    <ListView fx:id="clientsList" prefHeight="100" prefWidth="200" visible="false" managed="false"/>
 </VBox>
