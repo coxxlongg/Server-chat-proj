@@ -1,6 +1,5 @@
 package kz.ori.client;
 
-
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -8,21 +7,19 @@ import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 
 import java.io.*;
-
 import java.net.Socket;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.ResourceBundle;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-
-public class Controller implements Initializable{
+public class Controller implements Initializable {
 
     @FXML
-    private TextField msgField, loginField;
+    private TextField msgField, loginField, newNickField;
     @FXML
     private PasswordField passwordField;
 
@@ -30,13 +27,7 @@ public class Controller implements Initializable{
     private TextArea msgArea;
 
     @FXML
-    private HBox loginBox, msgBox;
-    @FXML
-    private TextField newNickField;
-
-    @FXML
-    private HBox changeNickBox;
-
+    private HBox loginBox, msgBox, changeNickBox;
 
     @FXML
     ListView<String> clientsList;
@@ -45,13 +36,16 @@ public class Controller implements Initializable{
     private DataOutputStream out;
     private String username;
     private static final String HISTORY_FILE_PATH = "chat_history.txt";
+
     public void setUsername(String username) {
         this.username = username;
-        if(this.username == null) {
+        if (this.username == null) {
             loginBox.setVisible(true);
             loginBox.setManaged(true);
             msgBox.setVisible(false);
             msgBox.setManaged(false);
+            changeNickBox.setVisible(false);
+            changeNickBox.setManaged(false);
             clientsList.setVisible(false);
             clientsList.setManaged(false);
         } else {
@@ -59,6 +53,8 @@ public class Controller implements Initializable{
             loginBox.setManaged(false);
             msgBox.setVisible(true);
             msgBox.setManaged(true);
+            changeNickBox.setVisible(true);
+            changeNickBox.setManaged(true);
             clientsList.setVisible(true);
             clientsList.setManaged(true);
         }
@@ -71,41 +67,53 @@ public class Controller implements Initializable{
             out = new DataOutputStream(socket.getOutputStream());
             new Thread(() -> {
                 try {
-                    // авторизация
+                    // цикл авторизации
                     while (true) {
                         String msg = in.readUTF();
-                        if(msg.startsWith("/login_ok ")) {
-
+                        if (msg.startsWith("/login_ok ")) {
                             setUsername(msg.split("\\s+")[1]);
                             break;
                         }
-                        if(msg.startsWith("/login_failed ")) {
+                        if (msg.startsWith("/login_failed ")) {
                             String reason = msg.split("\\s+", 2)[1];
                             msgArea.appendText(reason + "\n");
+                            writeToHistoryFile(reason);
                         }
                     }
                     // цикл общения
                     while (true) {
                         String msg = in.readUTF();
-                        if(msg.startsWith("/clients_list ")) {
+                        if (msg.startsWith("/clients_list ")) {
                             Platform.runLater(() -> {
                                 clientsList.getItems().clear();
-                                String[] tokens = msg.split("\\s+");
-                                for (int i = 1; i < tokens.length; i++) {
-                                    clientsList.getItems().add(tokens[i]);
-                                }
+                                List<String> clients = Stream.of(msg.split("\\s+"))
+                                        .skip(1)
+                                        .collect(Collectors.toList());
+                                clientsList.getItems().addAll(clients);
                             });
                             continue;
                         }
+                        if (msg.startsWith("/nick_changed ")) {
+                            String[] tokens = msg.split("\\s+");
+                            if (tokens[1].equals(username)) {
+                                setUsername(tokens[2]);
+                                msgArea.appendText("Your nickname has been changed to " + tokens[2] + "\n");
+                                writeToHistoryFile("Your nickname has been changed to " + tokens[2]);
+                            } else {
+                                msgArea.appendText(tokens[1] + " changed nickname to " + tokens[2] + "\n");
+                                writeToHistoryFile(tokens[1] + " changed nickname to " + tokens[2]);
+                            }
+                            continue;
+                        }
                         msgArea.appendText(msg + "\n");
+                        writeToHistoryFile(msg);
                     }
-                }catch (IOException e){
+                } catch (IOException e) {
                     e.printStackTrace();
                 } finally {
                     disconnect();
                 }
             }).start();
-
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -114,27 +122,25 @@ public class Controller implements Initializable{
     }
 
     public void login() {
-        if(socket == null || socket.isClosed()) {
+        if (socket == null || socket.isClosed()) {
             connect();
         }
 
-        if(loginField.getText().isEmpty()) {
+        if (loginField.getText().isEmpty()) {
             Alert alert = new Alert(Alert.AlertType.ERROR, "Имя пользователя не может быть пустым", ButtonType.OK);
             alert.showAndWait();
             return;
-
         }
         try {
             out.writeUTF("/login " + loginField.getText() + " " + passwordField.getText());
         } catch (IOException e) {
             e.printStackTrace();
         }
-
     }
 
     public void disconnect() {
         setUsername(null);
-        if(socket != null) {
+        if (socket != null) {
             try {
                 socket.close();
             } catch (IOException e) {
@@ -151,8 +157,8 @@ public class Controller implements Initializable{
             Alert alert = new Alert(Alert.AlertType.ERROR, "Невозможно отправить сообщение");
             alert.showAndWait();
         }
-
     }
+
     public void changeNick() {
         if (newNickField.getText().isEmpty()) {
             Alert alert = new Alert(Alert.AlertType.ERROR, "Новое имя пользователя не может быть пустым", ButtonType.OK);
@@ -165,10 +171,12 @@ public class Controller implements Initializable{
             e.printStackTrace();
         }
     }
+
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
         setUsername(null);
     }
+
     private void writeToHistoryFile(String message) {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(HISTORY_FILE_PATH, true))) {
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
